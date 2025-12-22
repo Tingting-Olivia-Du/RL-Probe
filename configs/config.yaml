@@ -1,0 +1,175 @@
+# RL-Probe Configuration
+# Token-level KL-Divergence Analysis for RLVR Training Dynamics
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+models:
+  # Base/Reference model (DPO stage, RL starting point)
+  base_model: "allenai/Llama-3.1-Tulu-3-8B-DPO"
+
+  # SFT model for additional baseline comparison
+  sft_model: "allenai/Llama-3.1-Tulu-3-8B-SFT"
+
+  # RLVR checkpoints to analyze
+  rlvr_checkpoints:
+    - step: 400
+      path: "allenai/Llama-3.1-Tulu-3-8B-RLVR-step-400"
+      stage: "early"
+    - step: 1200
+      path: "allenai/Llama-3.1-Tulu-3-8B-RLVR-step-1200"
+      stage: "mid"
+    - step: 2440
+      path: "allenai/Llama-3.1-Tulu-3-8B-RLVR"
+      stage: "final"
+
+# =============================================================================
+# Dataset Configuration
+# =============================================================================
+dataset:
+  name: "lighteval/MATH"
+  levels: [3, 4]  # Mid-difficulty problems
+  split: "test"
+
+  # Filtering criteria
+  filter:
+    dpo_correct: false   # DPO model gets it wrong
+    rlvr_correct: true   # Final RLVR model gets it right
+
+  # Sampling configuration
+  max_problems: 500      # Maximum problems to analyze
+  seed: 42
+
+# =============================================================================
+# Rollout Configuration
+# =============================================================================
+rollout:
+  # Number of rollouts per problem for diversity analysis
+  num_samples_per_problem: 5
+
+  # Generation parameters for DPO rollouts
+  generation:
+    max_new_tokens: 2048
+    temperature: 0.7
+    top_p: 0.95
+    do_sample: true
+
+  # Storage
+  save_dir: "rollouts/dpo_errors"
+
+# =============================================================================
+# Analysis Configuration
+# =============================================================================
+analysis:
+  # KL divergence settings
+  kl_divergence:
+    # Compute both directions for comprehensive analysis
+    compute_forward: true   # D_KL(RLVR || DPO)
+    compute_reverse: true   # D_KL(DPO || RLVR)
+    compute_js: true        # Jensen-Shannon divergence (symmetric)
+
+    # Numerical stability
+    epsilon: 1e-10
+
+  # Spike detection
+  spike_detection:
+    method: "zscore"        # Options: zscore, percentile, adaptive
+    threshold: 2.0          # z-score threshold for spike detection
+    min_spike_distance: 3   # Minimum tokens between spikes
+
+  # Entropy analysis
+  entropy:
+    compute: true
+    normalize: true         # Normalize by vocab size
+
+  # Token classification
+  token_classification:
+    enabled: true
+    categories:
+      - "math_symbol"       # +, -, *, /, =, etc.
+      - "number"            # Digits and numeric expressions
+      - "logical"           # therefore, because, if, then
+      - "step_marker"       # Step 1, First, Next, etc.
+      - "variable"          # x, y, n, etc.
+      - "other"
+
+# =============================================================================
+# Baseline Comparisons
+# =============================================================================
+baselines:
+  # Compare DPO vs SFT to isolate RLVR contribution
+  dpo_vs_sft:
+    enabled: true
+
+  # Compare across RLVR checkpoints
+  checkpoint_progression:
+    enabled: true
+    pairs:
+      - ["step_400", "dpo"]
+      - ["step_1200", "step_400"]
+      - ["step_2440", "step_1200"]
+
+# =============================================================================
+# Visualization Configuration
+# =============================================================================
+visualization:
+  # Output directory
+  output_dir: "outputs/figures"
+
+  # Figure formats
+  formats: ["png", "pdf"]
+  dpi: 300
+
+  # Heatmap settings
+  heatmap:
+    cmap: "RdYlBu_r"
+    figsize: [16, 8]
+
+  # Line plot settings
+  lineplot:
+    figsize: [14, 6]
+    show_spikes: true
+    spike_color: "red"
+
+  # Case study settings
+  case_study:
+    num_cases: 3
+    detailed_analysis: true
+
+# =============================================================================
+# Quantitative Metrics
+# =============================================================================
+metrics:
+  # Aggregate statistics
+  aggregate:
+    - "mean_kl_by_checkpoint"
+    - "spike_density_by_region"    # early/mid/late reasoning
+    - "entropy_reduction_rate"
+
+  # Correlation analysis
+  correlation:
+    with_correctness: true
+    with_problem_difficulty: true
+
+  # Statistical tests
+  significance:
+    test: "wilcoxon"
+    alpha: 0.05
+
+# =============================================================================
+# Hardware & Runtime
+# =============================================================================
+hardware:
+  device: "cuda"
+  dtype: "bfloat16"
+  batch_size: 4
+  num_workers: 4
+
+# Logging
+logging:
+  level: "INFO"
+  save_logs: true
+  log_dir: "outputs/logs"
+
+# Reproducibility
+seed: 42
