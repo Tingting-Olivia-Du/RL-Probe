@@ -10,7 +10,7 @@ This repository investigates the reasoning behavior of Large Language Models (LL
 
 The core research question: **At which exact tokens does a model's reasoning shift from incorrect to correct during RL training?**
 
-We calculate **Token-level KL-Divergence** across different training checkpoints (Steps 400, 1200, 2440) to visualize the "evolution" of a model's internal confidence and logical pathing.
+We calculate **Token-level KL-Divergence** *across* different training checkpoints (Steps 400, 1200, 2440) to visualize the "evolution" of a model's internal confidence and logical pathing.
 
 ### Key Features
 
@@ -70,7 +70,7 @@ We calculate **Token-level KL-Divergence** across different training checkpoints
 
 本项目探究大语言模型在**强化学习 (RL)** 阶段的推理行为演变。核心问题：**模型在哪些具体的 Token 位置从错误推理转向正确推理？**
 
-通过计算不同训练阶段 Checkpoints（Step 400, 1200, 2440）之间的 **Token 级 KL 散度**，精准定位模型逻辑从"错误"转向"正确"的决定性瞬间。
+通过计算不同训练阶段 Checkpoints（Step 400, 1200, 2440）**之间**的 **Token 级 KL 散度**，精准定位模型逻辑从"错误"转向"正确"的决定性瞬间。
 
 ### 核心特性
 
