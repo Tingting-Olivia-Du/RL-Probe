@@ -276,11 +276,11 @@ hardware:
 If you use this code in your research, please cite:
 
 ```bibtex
-@software{rl_probe_2024,
+@software{rl_probe_2026,
   title={RL-Probe: Token-Level KL-Divergence Analysis for RLVR Reasoning},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/your-username/RL-Probe}
+  author={Tingting Du},
+  year={2026},
+  url={https://github.com/Tingting-Olivia-Du/RL-Probe}
 }
 ```
 
