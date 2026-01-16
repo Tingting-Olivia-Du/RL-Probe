@@ -27,7 +27,8 @@ models:
 # Dataset Configuration
 # =============================================================================
 dataset:
-  name: "lighteval/MATH"
+  name: "EleutherAI/hendrycks_math"
+  subjects: ["all"]  # Use "all" to load all subjects, or specify: ["algebra", "geometry", etc.]
   levels: [3, 4]  # Mid-difficulty problems
   split: "test"
 

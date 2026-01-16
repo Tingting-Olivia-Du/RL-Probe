@@ -10,10 +10,21 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from datasets import load_dataset
+from datasets import load_dataset, concatenate_datasets
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+# Available subjects in hendrycks_math dataset
+MATH_SUBJECTS = [
+    "algebra",
+    "counting_and_probability",
+    "geometry",
+    "intermediate_algebra",
+    "number_theory",
+    "prealgebra",
+    "precalculus",
+]
 
 
 class MATHDataset:
@@ -26,6 +37,7 @@ class MATHDataset:
 
     def __init__(
         self,
+        subjects: List[str] = None,
         levels: List[int] = [3, 4],
         split: str = "test",
         cache_dir: Optional[str] = None,
@@ -34,10 +46,17 @@ class MATHDataset:
         Initialize MATH dataset loader.
 
         Args:
+            subjects: List of subjects to load, or ["all"] for all subjects
             levels: Difficulty levels to include (1-5)
             split: Dataset split to use
             cache_dir: Directory for caching downloaded data
         """
+        # Handle "all" subjects
+        if subjects is None or subjects == ["all"]:
+            self.subjects = MATH_SUBJECTS
+        else:
+            self.subjects = subjects
+
         self.levels = levels
         self.split = split
         self.cache_dir = cache_dir
@@ -46,13 +65,25 @@ class MATHDataset:
 
     def load(self) -> "MATHDataset":
         """Load the MATH dataset from HuggingFace."""
-        logger.info(f"Loading MATH dataset (split={self.split}, levels={self.levels})")
+        logger.info(f"Loading MATH dataset (split={self.split}, subjects={self.subjects}, levels={self.levels})")
 
-        self.dataset = load_dataset(
-            "lighteval/MATH",
-            split=self.split,
-            cache_dir=self.cache_dir,
-        )
+        # Load each subject separately and concatenate
+        subject_datasets = []
+        for subject in self.subjects:
+            logger.info(f"Loading subject: {subject}")
+            ds = load_dataset(
+                "EleutherAI/hendrycks_math",
+                subject,
+                split=self.split,
+                cache_dir=self.cache_dir,
+            )
+            subject_datasets.append(ds)
+
+        # Concatenate all subject datasets
+        if len(subject_datasets) == 1:
+            self.dataset = subject_datasets[0]
+        else:
+            self.dataset = concatenate_datasets(subject_datasets)
 
         # Filter by difficulty level
         self.dataset = self.dataset.filter(

@@ -37,12 +37,31 @@ def evaluate_model(
     preprocessor,
     filter_obj,
     max_new_tokens=2048,
+    cache_file=None,
+    save_interval=10,
 ):
-    """Evaluate a model on problems and return correctness dict."""
+    """Evaluate a model on problems and return correctness dict.
+
+    Args:
+        cache_file: Path to cache file for auto-saving results
+        save_interval: Save results every N problems (default: 10)
+    """
     results = {}
 
-    for problem in tqdm(problems, desc="Evaluating"):
+    # Load existing results if cache file exists
+    if cache_file and Path(cache_file).exists():
+        logger.info(f"Loading existing results from {cache_file}")
+        with open(cache_file) as f:
+            results = json.load(f)
+        logger.info(f"Loaded {len(results)} existing results")
+
+    for idx, problem in enumerate(tqdm(problems, desc="Evaluating"), 1):
         problem_id = problem.get("unique_id", str(hash(problem["problem"])))
+
+        # Skip if already evaluated
+        if problem_id in results:
+            continue
+
         prompt = preprocessor.format_prompt(problem["problem"])
 
         # Generate response
@@ -64,6 +83,18 @@ def evaluate_model(
         is_correct = filter_obj.check_correctness(response, filter_obj.extract_answer(ground_truth) or ground_truth)
 
         results[problem_id] = is_correct
+
+        # Auto-save every save_interval problems
+        if cache_file and idx % save_interval == 0:
+            with open(cache_file, "w") as f:
+                json.dump(results, f, indent=2)
+            logger.info(f"Auto-saved results after {idx} problems")
+
+    # Final save
+    if cache_file:
+        with open(cache_file, "w") as f:
+            json.dump(results, f, indent=2)
+        logger.info(f"Final save: {len(results)} results saved to {cache_file}")
 
     return results
 
@@ -122,13 +153,10 @@ def main():
         logger.info("Evaluating DPO model...")
         dpo_model = loader.load_model("dpo")
         dpo_results = evaluate_model(
-            dpo_model, tokenizer, problems, preprocessor, filter_obj
+            dpo_model, tokenizer, problems, preprocessor, filter_obj,
+            cache_file=dpo_cache
         )
         loader.unload_model("dpo")
-
-        # Save DPO results
-        with open(dpo_cache, "w") as f:
-            json.dump(dpo_results, f, indent=2)
 
         # Evaluate final RLVR model
         logger.info("Evaluating RLVR model...")
@@ -136,13 +164,10 @@ def main():
         final_rlvr = rlvr_checkpoints[-1]  # Get final checkpoint
         rlvr_model = loader.load_model(final_rlvr)
         rlvr_results = evaluate_model(
-            rlvr_model, tokenizer, problems, preprocessor, filter_obj
+            rlvr_model, tokenizer, problems, preprocessor, filter_obj,
+            cache_file=rlvr_cache
         )
         loader.unload_model(final_rlvr)
-
-        # Save RLVR results
-        with open(rlvr_cache, "w") as f:
-            json.dump(rlvr_results, f, indent=2)
 
     # Filter problems
     logger.info("Filtering problems (DPO-wrong, RLVR-right)...")
