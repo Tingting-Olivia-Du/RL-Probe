@@ -186,7 +186,7 @@ RL-Probe/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/RL-Probe.git
+git clone https://github.com/Tingting-Olivia-Du/RL-Probe.git
 cd RL-Probe
 
 # Create virtual environment
