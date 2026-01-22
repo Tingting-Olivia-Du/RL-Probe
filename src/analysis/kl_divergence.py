@@ -129,6 +129,10 @@ class KLDivergenceAnalyzer:
             # D_KL(Q || P) = sum_x Q(x) * log(Q(x) / P(x))
             kl = (probs_q * (torch.log(probs_q) - torch.log(probs_p))).sum(dim=-1)
 
+        # Ensure KL values are float32 (not bfloat16) for numpy compatibility
+        if kl.dtype == torch.bfloat16:
+            kl = kl.float()
+        
         return kl
 
     def compute_js_divergence(
@@ -166,6 +170,10 @@ class KLDivergenceAnalyzer:
         # JS divergence
         js = 0.5 * (kl_pm + kl_qm)
 
+        # Ensure JS values are float32 (not bfloat16) for numpy compatibility
+        if js.dtype == torch.bfloat16:
+            js = js.float()
+        
         return js
 
     def analyze_sequence(
@@ -217,6 +225,14 @@ class KLDivergenceAnalyzer:
                 tokenizer.decode([tid]) for tid in input_ids.squeeze().tolist()
             ]
 
+        # Ensure all tensors are float32 before returning (for numpy compatibility)
+        if kl_forward is not None and kl_forward.dtype == torch.bfloat16:
+            kl_forward = kl_forward.float()
+        if kl_reverse is not None and kl_reverse.dtype == torch.bfloat16:
+            kl_reverse = kl_reverse.float()
+        if js_div is not None and js_div.dtype == torch.bfloat16:
+            js_div = js_div.float()
+        
         return KLResult(
             kl_forward=kl_forward.squeeze() if kl_forward is not None else None,
             kl_reverse=kl_reverse.squeeze() if kl_reverse is not None else None,

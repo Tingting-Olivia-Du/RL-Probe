@@ -162,9 +162,8 @@ RL-Probe/
 │       └── aggregate.py       # Aggregate statistics plots
 ├── scripts/
 │   ├── 01_prepare_data.py     # Step 1: Data preparation
-│   ├── 02_generate_rollouts.py # Step 2: Rollout generation
-│   ├── 03_compute_kl.py       # Step 3: KL computation
-│   ├── 04_visualize.py        # Step 4: Visualization
+│   ├── 03_compute_kl.py       # Step 2: KL computation (uses DPO responses)
+│   ├── 04_visualize.py        # Step 3: Visualization
 │   └── run_full_pipeline.sh   # Run all steps
 ├── experiments/
 │   └── baseline_comparison.py # DPO vs SFT baseline experiment
@@ -208,8 +207,7 @@ bash scripts/run_full_pipeline.sh
 
 # Or run steps individually:
 python scripts/01_prepare_data.py
-python scripts/02_generate_rollouts.py
-python scripts/03_compute_kl.py
+python scripts/03_compute_kl.py --use-dpo-responses
 python scripts/04_visualize.py
 ```
 

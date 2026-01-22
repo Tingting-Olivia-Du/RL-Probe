@@ -110,6 +110,9 @@ class EntropyAnalyzer:
 
         # Compute entropy
         entropy = self.compute_entropy(logits)
+        # Convert BFloat16 to float32 before numpy conversion
+        if entropy.dtype == torch.bfloat16:
+            entropy = entropy.float()
         entropy = entropy.squeeze().cpu().numpy()
 
         # Focus on response region
@@ -127,7 +130,7 @@ class EntropyAnalyzer:
             vocab_size = self.vocab_size or logits.shape[-1]
             max_entropy = np.log(vocab_size)
             normalized_entropy = response_entropy / max_entropy
-            mean_normalized = mean_entropy / max_entropy
+            mean_normalized = float(mean_entropy / max_entropy)  # Ensure Python float
 
         # Compute region-wise entropy
         region_entropy = self._compute_region_entropy(response_entropy)

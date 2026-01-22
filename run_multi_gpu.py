@@ -15,7 +15,7 @@ Multi-GPU Run Script
     python run_multi_gpu.py --gpus all --device auto
 
     # 只运行特定步骤
-    python run_multi_gpu.py --gpus 0,1 --steps prepare,rollout
+    python run_multi_gpu.py --gpus 0,1 --steps prepare,kl
 
     # 干运行模式（只显示配置不实际运行）
     python run_multi_gpu.py --gpus 0,1,2 --dry-run
@@ -81,8 +81,8 @@ def parse_args():
   # 使用所有可用GPU
   %(prog)s --gpus all
 
-  # 只运行数据准备和rollout生成
-  %(prog)s --gpus 0,1 --steps prepare,rollout
+  # 只运行数据准备和KL计算
+  %(prog)s --gpus 0,1 --steps prepare,kl
 
   # 查看配置但不实际运行
   %(prog)s --gpus 0,1,2 --dry-run
@@ -129,7 +129,7 @@ def parse_args():
         "--steps",
         type=str,
         default="all",
-        help='运行的步骤 (逗号分隔: prepare,rollout,kl,visualize 或 "all")',
+        help='运行的步骤 (逗号分隔: prepare,kl,visualize 或 "all")',
     )
 
     # 其他选项
@@ -255,6 +255,10 @@ def run_step(script_path: str, config_path: str, step_name: str, verbose: bool =
     logger.info(f"{'='*60}")
 
     cmd = [sys.executable, script_path, "--config", config_path]
+    
+    # 为 kl 步骤添加 --use-dpo-responses 参数
+    if step_name == "kl":
+        cmd.append("--use-dpo-responses")
 
     # 设置环境变量，确保子进程能找到 src 模块
     env = os.environ.copy()
@@ -335,7 +339,7 @@ def main():
 
     # 解析运行步骤
     if args.steps.lower() == "all":
-        steps = ["prepare", "rollout", "kl", "visualize"]
+        steps = ["prepare", "kl", "visualize"]
     else:
         steps = [s.strip() for s in args.steps.split(",")]
 
@@ -350,7 +354,6 @@ def main():
     # 运行各个步骤
     step_scripts = {
         "prepare": "scripts/01_prepare_data.py",
-        "rollout": "scripts/02_generate_rollouts.py",
         "kl": "scripts/03_compute_kl.py",
         "visualize": "scripts/04_visualize.py",
     }

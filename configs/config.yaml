@@ -12,15 +12,47 @@ models:
   sft_model: "allenai/Llama-3.1-Tulu-3-8B-SFT"
 
   # RLVR checkpoints to analyze
+  # Using revision parameter to load from specific branches
   rlvr_checkpoints:
     - step: 100
-      path: "allenai/Llama-3.1-Tulu-3-8B-step-400"
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_100"  # Branch name on HuggingFace
       stage: "early"
-    - step: 500
-      path: "allenai/Llama-3.1-Tulu-3-8B-step-1200"
+    - step: 200
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_200"  # Branch name on HuggingFace
+      stage: "early"
+    - step: 300
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_300"  # Branch name on HuggingFace
+      stage: "early"
+    - step: 400
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_400"  # Branch name on HuggingFace
       stage: "mid"
+    - step: 500
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_500"  # Branch name on HuggingFace
+      stage: "mid"
+    - step: 600
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_600"  # Branch name on HuggingFace
+      stage: "mid"
+    - step: 700
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_700"  # Branch name on HuggingFace
+      stage: "mid"
+    - step: 800
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_800"  # Branch name on HuggingFace
+      stage: "late"
+    - step: 900
+      path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_900"  # Branch name on HuggingFace
+      stage: "late"
     - step: 1000
       path: "allenai/Llama-3.1-Tulu-3-8B"
+      revision: "step_1000"  # Branch name on HuggingFace
       stage: "final"
 
 # =============================================================================

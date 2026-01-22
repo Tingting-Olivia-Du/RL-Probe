@@ -89,8 +89,11 @@ class SpikeDetector:
         Returns:
             SpikeAnalysis with detected spikes
         """
-        # Convert to numpy
+        # Convert to numpy (handle BFloat16 by converting to float32 first)
         if isinstance(kl_values, torch.Tensor):
+            # Convert BFloat16 to float32 before numpy conversion
+            if kl_values.dtype == torch.bfloat16:
+                kl_values = kl_values.float()
             kl_values = kl_values.cpu().numpy()
         if isinstance(token_ids, torch.Tensor):
             token_ids = token_ids.cpu().numpy()
@@ -151,13 +154,14 @@ class SpikeDetector:
         # Compute spike density by region
         spike_density = self._compute_spike_density(spike_positions, response_length)
 
+        # Convert numpy types to Python native types for JSON serialization
         return SpikeAnalysis(
             spikes=spikes,
             kl_values=kl_values,
-            threshold=effective_threshold,
-            mean_kl=mean_kl,
-            std_kl=std_kl,
-            spike_density=spike_density,
+            threshold=float(effective_threshold),
+            mean_kl=float(mean_kl),
+            std_kl=float(std_kl),
+            spike_density=spike_density,  # This is already a dict with float values
         )
 
     def _detect_zscore(
@@ -271,11 +275,11 @@ class SpikeDetector:
             region = self._get_region(pos, total_length)
             regions[region] += 1
 
-        # Convert to density
+        # Convert to density (ensure Python float, not numpy float)
         density = {}
         for region, count in regions.items():
             size = region_sizes[region]
-            density[region] = count / size if size > 0 else 0.0
+            density[region] = float(count / size if size > 0 else 0.0)
 
         return density
 

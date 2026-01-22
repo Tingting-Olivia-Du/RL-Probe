@@ -197,10 +197,10 @@ class TokenClassifier:
             if values:
                 statistics[category] = {
                     "count": len(values),
-                    "mean_kl": np.mean(values),
-                    "std_kl": np.std(values),
-                    "max_kl": np.max(values),
-                    "min_kl": np.min(values),
+                    "mean_kl": float(np.mean(values)),
+                    "std_kl": float(np.std(values)),
+                    "max_kl": float(np.max(values)),
+                    "min_kl": float(np.min(values)),
                 }
             else:
                 statistics[category] = {

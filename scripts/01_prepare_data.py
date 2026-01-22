@@ -8,13 +8,13 @@ Load MATH dataset and filter for problems where:
 
 This script evaluates models on the dataset and creates the filtered subset.
 # 使用 GPU 0 运行 DPO 模型，评测 50 道题
-python scripts/01_prepare_data.py --model dpo --gpu 6 --max-questions 50
+python scripts/01_prepare_data.py --model dpo --gpu 6 --max-questions 500
 
 # 使用 GPU 1 和 2 运行两个模型
 python scripts/01_prepare_data.py --model both --gpu 1,2 --max-questions 50
 
 # 使用 GPU 4 运行 RLVR 模型
-python scripts/01_prepare_data.py --model rlvr --gpu 2 --max-questions 50
+python scripts/01_prepare_data.py --model rlvr --gpu 2 --max-questions 500
 
 """
 

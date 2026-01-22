@@ -12,7 +12,6 @@ echo ""
 # Configuration
 CONFIG="configs/config.yaml"
 DATA_DIR="data/filtered"
-ROLLOUT_DIR="rollouts/dpo_errors"
 RESULTS_DIR="outputs/results"
 FIGURES_DIR="outputs/figures"
 
@@ -24,26 +23,18 @@ python scripts/01_prepare_data.py \
     --output-dir "$DATA_DIR"
 echo ""
 
-# Step 2: Generate Rollouts
-echo "[Step 2/4] Generating DPO rollouts..."
-echo "-------------------------------------------"
-python scripts/02_generate_rollouts.py \
-    --config "$CONFIG" \
-    --problems "$DATA_DIR/filtered_problems.json" \
-    --output-dir "$ROLLOUT_DIR"
-echo ""
-
-# Step 3: Compute KL Divergence
-echo "[Step 3/4] Computing KL divergence..."
+# Step 2: Compute KL Divergence (using DPO responses as rollouts)
+echo "[Step 2/3] Computing KL divergence..."
 echo "-------------------------------------------"
 python scripts/03_compute_kl.py \
     --config "$CONFIG" \
-    --rollouts "$ROLLOUT_DIR/all_rollouts.json" \
+    --use-dpo-responses \
+    --dpo-responses "$DATA_DIR/dpo_responses.json" \
     --output-dir "$RESULTS_DIR"
 echo ""
 
-# Step 4: Visualize Results
-echo "[Step 4/4] Generating visualizations..."
+# Step 3: Visualize Results
+echo "[Step 3/3] Generating visualizations..."
 echo "-------------------------------------------"
 python scripts/04_visualize.py \
     --config "$CONFIG" \
@@ -58,6 +49,5 @@ echo "=========================================="
 echo ""
 echo "Results saved to:"
 echo "  - Data:    $DATA_DIR"
-echo "  - Rollouts: $ROLLOUT_DIR"
 echo "  - Results: $RESULTS_DIR"
 echo "  - Figures: $FIGURES_DIR"

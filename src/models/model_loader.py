@@ -17,6 +17,26 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
 logger = logging.getLogger(__name__)
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    # Load .env file from project root
+    project_root = Path(__file__).parent.parent.parent
+    env_path = project_root / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        logger.info(f"Loaded environment variables from {env_path}")
+        # Also set HF_TOKEN environment variable for transformers library
+        hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+        if hf_token:
+            os.environ["HF_TOKEN"] = hf_token
+            os.environ["HUGGINGFACE_TOKEN"] = hf_token
+            logger.info("Set HF_TOKEN environment variable for transformers")
+    else:
+        logger.warning(f".env file not found at {env_path}, using system environment variables")
+except ImportError:
+    logger.warning("python-dotenv not installed, using system environment variables only")
+
 def get_device_map_config(
     device: str,
     multi_gpu_config: Optional[Dict[str, Any]] = None,
@@ -62,6 +82,7 @@ class ModelCheckpoint:
     path: str
     step: Optional[int] = None
     stage: Optional[str] = None  # "sft", "dpo", "early", "mid", "final"
+    revision: Optional[str] = None  # HuggingFace branch/tag name
     model: Optional[PreTrainedModel] = None
     loaded: bool = False
 
@@ -78,6 +99,7 @@ class ModelLoader:
         dtype: torch.dtype = torch.bfloat16,
         cache_dir: Optional[str] = None,
         multi_gpu_config: Optional[Dict[str, Any]] = None,
+        hf_token: Optional[str] = None,
     ):
         self.device = device
         self.dtype = dtype
@@ -85,6 +107,13 @@ class ModelLoader:
         self.multi_gpu_config = multi_gpu_config
         self.checkpoints: Dict[str, ModelCheckpoint] = {}
         self.tokenizer = None
+        
+        # Get HuggingFace token from parameter, environment variable, or .env file
+        self.hf_token = hf_token or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+        if self.hf_token:
+            logger.info("Using HuggingFace token for model loading")
+        else:
+            logger.warning("No HuggingFace token found. Some models may require authentication.")
 
         # 预先计算设备配置
         self.device_config = get_device_map_config(device, multi_gpu_config)
@@ -95,11 +124,13 @@ class ModelLoader:
         path: str,
         step: Optional[int] = None,
         stage: Optional[str] = None,
+        revision: Optional[str] = None,
     ) -> None:
         self.checkpoints[name] = ModelCheckpoint(
-            name=name, path=path, step=step, stage=stage
+            name=name, path=path, step=step, stage=stage, revision=revision
         )
-        logger.info(f"已注册检查点: {name} ({path})")
+        revision_info = f" (revision: {revision})" if revision else ""
+        logger.info(f"已注册检查点: {name} ({path}{revision_info})")
 
     def register_from_config(self, config: Dict[str, Any]) -> None:
         models_config = config.get("models", {})
@@ -109,19 +140,39 @@ class ModelLoader:
             self.register_checkpoint("sft", models_config["sft_model"], stage="sft")
         for ckpt in models_config.get("rlvr_checkpoints", []):
             name = f"rlvr_step_{ckpt['step']}"
-            self.register_checkpoint(name, ckpt["path"], step=ckpt["step"], stage=ckpt["stage"])
+            revision = ckpt.get("revision")  # Get revision if specified
+            self.register_checkpoint(
+                name, 
+                ckpt["path"], 
+                step=ckpt["step"], 
+                stage=ckpt["stage"],
+                revision=revision
+            )
 
-    def load_tokenizer(self, model_path: Optional[str] = None) -> AutoTokenizer:
+    def load_tokenizer(self, model_path: Optional[str] = None, revision: Optional[str] = None) -> AutoTokenizer:
         if self.tokenizer is not None:
             return self.tokenizer
         if model_path is None:
             if not self.checkpoints:
                 raise ValueError("尚未注册任何检查点")
             model_path = list(self.checkpoints.values())[0].path
+            # Use revision from first checkpoint if not specified
+            if revision is None and self.checkpoints:
+                first_ckpt = list(self.checkpoints.values())[0]
+                revision = first_ckpt.revision
 
-        logger.info(f"正在加载分词器: {model_path}")
+        logger.info(f"正在加载分词器: {model_path}" + (f" (revision: {revision})" if revision else ""))
+        tokenizer_kwargs = {
+            "cache_dir": self.cache_dir,
+            "trust_remote_code": True,
+        }
+        if self.hf_token:
+            tokenizer_kwargs["token"] = self.hf_token
+        if revision:
+            tokenizer_kwargs["revision"] = revision
+        
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_path, cache_dir=self.cache_dir, trust_remote_code=True
+            model_path, **tokenizer_kwargs
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -150,14 +201,25 @@ class ModelLoader:
             current_max_memory = None
 
         # 核心修复 3：low_cpu_mem_usage=True 解决 embed_tokens 分配失败问题
+        model_kwargs = {
+            "torch_dtype": self.dtype,
+            "device_map": current_device_map,
+            "max_memory": current_max_memory,
+            "cache_dir": self.cache_dir,
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+        }
+        if self.hf_token:
+            model_kwargs["token"] = self.hf_token
+        
+        # Add revision if specified (for loading from specific branch)
+        if ckpt.revision:
+            model_kwargs["revision"] = ckpt.revision
+            logger.info(f"Loading from revision: {ckpt.revision}")
+        
         model = AutoModelForCausalLM.from_pretrained(
             ckpt.path,
-            torch_dtype=self.dtype,
-            device_map=current_device_map,
-            max_memory=current_max_memory,
-            cache_dir=self.cache_dir,
-            trust_remote_code=True,
-            low_cpu_mem_usage=True, 
+            **model_kwargs
         )
         model.eval()
 
@@ -166,14 +228,40 @@ class ModelLoader:
         return model
 
     def unload_model(self, name: str) -> None:
+        """卸载指定的模型检查点，释放GPU显存。"""
         if name in self.checkpoints:
             ckpt = self.checkpoints[name]
             if ckpt.model is not None:
-                del ckpt.model
+                model = ckpt.model
+                
+                # For models using device_map="auto", we need to ensure all devices are cleared
+                # Move model to CPU first to ensure all GPU tensors are freed
+                try:
+                    # If model has device_map attribute, it's using accelerate
+                    if hasattr(model, "hf_device_map") or hasattr(model, "device_map"):
+                        # accelerate models need special handling
+                        # Move to CPU explicitly
+                        model = model.cpu()
+                    else:
+                        # Standard model, move to CPU
+                        model = model.cpu()
+                except Exception as e:
+                    logger.warning(f"Warning while moving model to CPU: {e}")
+                
+                # Delete the model object
+                del model
                 ckpt.model = None
                 ckpt.loaded = False
+                
+                # Clear GPU cache on all devices
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
+                    # Also clear on all visible devices if using multi-GPU
+                    if isinstance(self.device_config, dict) or (isinstance(self.device_config, str) and self.device_config == "auto"):
+                        for i in range(torch.cuda.device_count()):
+                            with torch.cuda.device(i):
+                                torch.cuda.empty_cache()
+                
                 logger.info(f"已卸载模型: {name}")
 
     def unload_all(self) -> None:
