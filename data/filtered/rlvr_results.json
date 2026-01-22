@@ -28,5 +28,15 @@
   "test/precalculus/1313.json": false,
   "test/intermediate_algebra/207.json": true,
   "test/number_theory/516.json": false,
-  "test/algebra/2253.json": true
+  "test/algebra/2253.json": true,
+  "test/counting_and_probability/1114.json": false,
+  "test/intermediate_algebra/47.json": false,
+  "test/algebra/1035.json": true,
+  "test/algebra/893.json": false,
+  "test/geometry/353.json": true,
+  "test/number_theory/357.json": false,
+  "test/prealgebra/1761.json": false,
+  "test/algebra/2023.json": false,
+  "test/counting_and_probability/377.json": false,
+  "test/algebra/873.json": true
 }
