@@ -12,6 +12,22 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+try:
+    import sympy
+    from sympy import simplify, sympify, N, Symbol, symbols
+    # Try to import LaTeX parser (requires antlr4-python3-runtime)
+    try:
+        from sympy.parsing.latex import parse_latex
+        LATEX_PARSER_AVAILABLE = True
+    except ImportError:
+        LATEX_PARSER_AVAILABLE = False
+        logger.warning("SymPy LaTeX parser not available. Install antlr4-python3-runtime for LaTeX parsing.")
+    SYMPY_AVAILABLE = True
+except ImportError:
+    SYMPY_AVAILABLE = False
+    LATEX_PARSER_AVAILABLE = False
+    logger.warning("SymPy not available. Mathematical equivalence checking will be disabled.")
+
 
 class ProblemFilter:
     """
@@ -22,15 +38,25 @@ class ProblemFilter:
     - RLVR model produces correct answers
     """
 
-    def __init__(self, answer_extraction_pattern: Optional[str] = None):
+    def __init__(
+        self, 
+        answer_extraction_pattern: Optional[str] = None,
+        use_sympy: bool = True,
+    ):
         """
         Initialize the problem filter.
 
         Args:
             answer_extraction_pattern: Regex pattern for extracting answers
+            use_sympy: Whether to use SymPy for mathematical equivalence checking
         """
         # Default pattern matches \\boxed{...} format used in MATH
         self.answer_pattern = answer_extraction_pattern or r"\\boxed\{([^}]+)\}"
+        self.use_sympy = use_sympy and SYMPY_AVAILABLE
+        if self.use_sympy:
+            logger.info("SymPy-based equivalence checking enabled")
+        else:
+            logger.info("Using string-based comparison (SymPy disabled or unavailable)")
 
     def extract_answer(self, response: str) -> Optional[str]:
         """
@@ -68,6 +94,138 @@ class ProblemFilter:
 
         return answer.lower()
 
+    def _parse_math_expression(self, expr: str) -> Optional[sympy.Expr]:
+        """
+        Parse a mathematical expression from LaTeX or text format.
+
+        Args:
+            expr: Mathematical expression string
+
+        Returns:
+            SymPy expression or None if parsing fails
+        """
+        if not SYMPY_AVAILABLE:
+            return None
+
+        try:
+            # Try parsing as LaTeX first (if parser available)
+            if LATEX_PARSER_AVAILABLE:
+                try:
+                    return parse_latex(expr)
+                except Exception:
+                    pass
+
+            # Try parsing as standard SymPy expression
+            # Replace common LaTeX commands with SymPy equivalents
+            cleaned = expr.strip()
+            
+            # Handle LaTeX fractions: \frac{a}{b} -> (a)/(b)
+            frac_pattern = r"\\frac\{([^}]+)\}\{([^}]+)\}"
+            while re.search(frac_pattern, cleaned):
+                cleaned = re.sub(frac_pattern, r"(\1)/(\2)", cleaned)
+            
+            # Handle LaTeX sqrt: \sqrt{x} -> sqrt(x)
+            sqrt_pattern = r"\\sqrt\{([^}]+)\}"
+            cleaned = re.sub(sqrt_pattern, r"sqrt(\1)", cleaned)
+            
+            # Handle LaTeX sqrt with index: \sqrt[n]{x} -> root(x, n)
+            sqrtn_pattern = r"\\sqrt\[([^\]]+)\]\{([^}]+)\}"
+            cleaned = re.sub(sqrtn_pattern, r"root(\2, \1)", cleaned)
+            
+            # Replace other LaTeX commands
+            replacements = {
+                "\\pi": "pi",
+                "\\cdot": "*",
+                "\\times": "*",
+                "\\div": "/",
+                "\\pm": "+-",
+                "\\mp": "-+",
+                "\\leq": "<=",
+                "\\geq": ">=",
+                "\\neq": "!=",
+                "\\approx": "~",
+                "\\infty": "oo",
+                "\\sum": "Sum",
+                "\\prod": "Product",
+                "\\int": "Integral",
+            }
+            for latex_cmd, sympy_cmd in replacements.items():
+                cleaned = cleaned.replace(latex_cmd, sympy_cmd)
+            
+            # Remove extra spaces
+            cleaned = re.sub(r"\s+", "", cleaned)
+            
+            try:
+                return sympify(cleaned, evaluate=False)
+            except Exception:
+                pass
+
+            # Try direct sympify as last resort
+            return sympify(expr, evaluate=False)
+        except Exception as e:
+            logger.debug(f"Failed to parse expression '{expr}': {e}")
+            return None
+
+    def _check_sympy_equivalence(
+        self,
+        expr1: str,
+        expr2: str,
+        tolerance: float = 1e-10,
+    ) -> bool:
+        """
+        Check if two mathematical expressions are equivalent using SymPy.
+
+        Args:
+            expr1: First expression
+            expr2: Second expression
+            tolerance: Numerical tolerance for comparison
+
+        Returns:
+            True if expressions are equivalent, False otherwise
+        """
+        if not SYMPY_AVAILABLE:
+            return False
+
+        try:
+            parsed1 = self._parse_math_expression(expr1)
+            parsed2 = self._parse_math_expression(expr2)
+
+            if parsed1 is None or parsed2 is None:
+                return False
+
+            # Simplify both expressions
+            simplified1 = simplify(parsed1)
+            simplified2 = simplify(parsed2)
+
+            # Try symbolic equality first
+            if simplified1.equals(simplified2):
+                return True
+
+            # Try numerical comparison if both are numeric
+            try:
+                num1 = float(N(simplified1))
+                num2 = float(N(simplified2))
+                return abs(num1 - num2) < tolerance
+            except:
+                pass
+
+            # Try subtracting and checking if result simplifies to zero
+            diff = simplify(simplified1 - simplified2)
+            if diff.equals(0):
+                return True
+
+            # Try numerical evaluation of difference
+            try:
+                diff_val = float(N(diff))
+                return abs(diff_val) < tolerance
+            except:
+                pass
+
+            return False
+        except Exception as e:
+            logger.debug(f"SymPy equivalence check failed: {e}")
+            return False
+
     def check_correctness(
         self,
         model_response: str,
@@ -75,6 +233,9 @@ class ProblemFilter:
     ) -> bool:
         """
         Check if model response matches ground truth.
+
+        Uses SymPy for mathematical equivalence checking if available,
+        otherwise falls back to string-based comparison.
 
         Args:
             model_response: Model's generated response
@@ -87,6 +248,13 @@ class ProblemFilter:
         if extracted is None:
             return False
 
+        # Try SymPy-based equivalence checking first if enabled
+        if self.use_sympy:
+            is_equivalent = self._check_sympy_equivalence(extracted, ground_truth)
+            if is_equivalent:
+                return True
+
+        # Fall back to string-based comparison
         norm_extracted = self.normalize_answer(extracted)
         norm_truth = self.normalize_answer(ground_truth)
 

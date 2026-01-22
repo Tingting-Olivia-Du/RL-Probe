@@ -37,11 +37,37 @@ def main():
     parser.add_argument("--rollouts", type=str, default="rollouts/dpo_errors/all_rollouts.json", help="Rollouts path")
     parser.add_argument("--output-dir", type=str, default="outputs/results", help="Output directory")
     parser.add_argument("--checkpoint", type=str, default=None, help="Specific checkpoint to analyze")
+    parser.add_argument(
+        "--gpu",
+        type=str,
+        default=None,
+        help="Specify GPU(s) to use. Examples: '0' for cuda:0, '0,1,2' for multiple GPUs, 'cuda:1' for specific device",
+    )
     args = parser.parse_args()
 
     # Load config
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
+    # Override GPU settings from command line if provided
+    if args.gpu:
+        gpu_ids = [int(x.strip()) for x in args.gpu.split(",") if x.strip().isdigit()]
+        if len(gpu_ids) == 1:
+            config["hardware"]["device"] = f"cuda:{gpu_ids[0]}"
+            config["hardware"]["multi_gpu"] = {"enabled": False}
+            logger.info(f"Using single GPU: cuda:{gpu_ids[0]}")
+        elif len(gpu_ids) > 1:
+            config["hardware"]["device"] = "auto"
+            if "multi_gpu" not in config["hardware"]:
+                config["hardware"]["multi_gpu"] = {}
+            config["hardware"]["multi_gpu"]["enabled"] = True
+            config["hardware"]["multi_gpu"]["gpu_ids"] = gpu_ids
+            logger.info(f"Using multiple GPUs: {gpu_ids}")
+        else:
+            if args.gpu.startswith("cuda:") or args.gpu == "cpu":
+                config["hardware"]["device"] = args.gpu
+                config["hardware"]["multi_gpu"] = {"enabled": False}
+                logger.info(f"Using device: {args.gpu}")
 
     # Create output directory
     output_dir = Path(args.output_dir)

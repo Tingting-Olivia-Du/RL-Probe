@@ -13,14 +13,14 @@ models:
 
   # RLVR checkpoints to analyze
   rlvr_checkpoints:
-    - step: 400
-      path: "allenai/Llama-3.1-Tulu-3-8B-RLVR-step-400"
+    - step: 100
+      path: "allenai/Llama-3.1-Tulu-3-8B-step-400"
       stage: "early"
-    - step: 1200
-      path: "allenai/Llama-3.1-Tulu-3-8B-RLVR-step-1200"
+    - step: 500
+      path: "allenai/Llama-3.1-Tulu-3-8B-step-1200"
       stage: "mid"
-    - step: 2440
-      path: "allenai/Llama-3.1-Tulu-3-8B-RLVR"
+    - step: 1000
+      path: "allenai/Llama-3.1-Tulu-3-8B"
       stage: "final"
 
 # =============================================================================
@@ -161,10 +161,22 @@ metrics:
 # Hardware & Runtime
 # =============================================================================
 hardware:
-  device: "cuda"
+  # Device configuration options:
+  #   - "cuda" or "cuda:0": 单 GPU（默认使用第一张）
+  #   - "cuda:1", "cuda:2": 指定具体 GPU
+  #   - "auto": 自动将模型分片到所有可用 GPU（推荐多 GPU）
+  #   - "balanced": 均匀分配到所有 GPU
+  #   - "sequential": 按顺序填充 GPU
+  device: "balanced"
   dtype: "bfloat16"
   batch_size: 4
   num_workers: 4
+
+  # 多 GPU 配置（当 device 为 "auto"/"balanced"/"sequential" 时生效）
+  multi_gpu:
+    enabled: true           # 是否启用多 GPU
+    gpu_ids: [0, 4, 5]            # 指定 GPU ID 列表，如 [0, 1, 2]，null 表示使用所有可用 GPU
+    max_memory_per_gpu: 40GB # 每个 GPU 最大显存，如 "20GiB"，null 表示不限制
 
 # Logging
 logging:

@@ -1,0 +1,32 @@
+[
+  {
+    "problem": "What is the least positive integer multiple of 30 that can be written with only the digits 0 and 2?",
+    "solution": "Let $M$ be the least positive multiple of 30 that can be written with only the digits 0 and 2. First, $M$ is a multiple of 10, so its units digit must be 0. $M$ is also a multiple of 3, which means the sum of its digits must be a multiple of 3. Therefore, we must take at least  three 2's. Since $M$ is minimal, we take exactly three 2's and do not have any additional 0's: $M=\\boxed{2220}$.",
+    "answer": "2220",
+    "subject": "Number Theory",
+    "level": 3,
+    "unique_id": "test/number_theory/1032.json",
+    "dpo_correct": false,
+    "rlvr_correct": true
+  },
+  {
+    "problem": "Let $a$ be a positive real number such that all the roots of\n\\[x^3 + ax^2 + ax + 1 = 0\\]are real.  Find the smallest possible value of $a.$",
+    "solution": "Note that $x = -1$ is always a root of $x^3 + ax^2 + ax + 1 = 0,$ so we can factor out $x + 1,$ to get\n\\[(x + 1) (x^2 + (a - 1) x + 1) = 0.\\]The quadratic factor has real roots if and only if its discriminant is nonnegative:\n\\[(a - 1)^2 - 4 \\ge 0.\\]This reduces to $a^2 - 2a - 3 \\ge 0,$ which factors as $(a + 1)(a - 3) \\ge 0.$  The smallest positive value that satisfies this inequality is $\\boxed{3}.$",
+    "answer": "3",
+    "subject": "Intermediate Algebra",
+    "level": 3,
+    "unique_id": "test/intermediate_algebra/1000.json",
+    "dpo_correct": false,
+    "rlvr_correct": true
+  },
+  {
+    "problem": "In how many ways can 8 people sit around a round table if 3 of the people -- Pierre, Rosa, and Thomas -- all want to sit together?  (Two seatings are considered the same if one is a rotation of the other.)",
+    "solution": "First choose three consecutive seats for Pierre, Rosa, and Thomas.  It doesn't matter which three consecutive seats that we choose, since any three such seats can be rotated to any other such seats.  Once the three seats are chosen, there are $3!$ ways to seat the three friends there.  The other five seats are for the other five people, so there are $5!$ ways to seat them there.  The answer is $3! \\times 5! = \\boxed{720}$.",
+    "answer": "720",
+    "subject": "Counting & Probability",
+    "level": 4,
+    "unique_id": "test/counting_and_probability/134.json",
+    "dpo_correct": false,
+    "rlvr_correct": true
+  }
+]

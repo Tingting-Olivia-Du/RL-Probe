@@ -38,9 +38,9 @@ class DataPreprocessor:
         self.tokenizer = tokenizer
         self.max_length = max_length
 
-        # Default Tulu-style prompt template
+        # Default Tulu-style prompt template with LaTeX output instruction
         self.prompt_template = prompt_template or (
-            "<|user|>\n{problem}\n<|assistant|>\n"
+            "<|user|>\n{problem}\n\nPlease solve this problem step by step and provide your final answer in LaTeX format using \\boxed{{answer}}.\n<|assistant|>\n"
         )
 
     def format_prompt(self, problem: str) -> str:

@@ -37,11 +37,37 @@ def main():
     parser.add_argument("--output-dir", type=str, default="rollouts/dpo_errors", help="Output directory")
     parser.add_argument("--num-samples", type=int, default=None, help="Override samples per problem")
     parser.add_argument("--max-problems", type=int, default=None, help="Limit number of problems")
+    parser.add_argument(
+        "--gpu",
+        type=str,
+        default=None,
+        help="Specify GPU(s) to use. Examples: '0' for cuda:0, '0,1,2' for multiple GPUs, 'cuda:1' for specific device",
+    )
     args = parser.parse_args()
 
     # Load config
     with open(args.config) as f:
         config = yaml.safe_load(f)
+
+    # Override GPU settings from command line if provided
+    if args.gpu:
+        gpu_ids = [int(x.strip()) for x in args.gpu.split(",") if x.strip().isdigit()]
+        if len(gpu_ids) == 1:
+            config["hardware"]["device"] = f"cuda:{gpu_ids[0]}"
+            config["hardware"]["multi_gpu"] = {"enabled": False}
+            logger.info(f"Using single GPU: cuda:{gpu_ids[0]}")
+        elif len(gpu_ids) > 1:
+            config["hardware"]["device"] = "auto"
+            if "multi_gpu" not in config["hardware"]:
+                config["hardware"]["multi_gpu"] = {}
+            config["hardware"]["multi_gpu"]["enabled"] = True
+            config["hardware"]["multi_gpu"]["gpu_ids"] = gpu_ids
+            logger.info(f"Using multiple GPUs: {gpu_ids}")
+        else:
+            if args.gpu.startswith("cuda:") or args.gpu == "cpu":
+                config["hardware"]["device"] = args.gpu
+                config["hardware"]["multi_gpu"] = {"enabled": False}
+                logger.info(f"Using device: {args.gpu}")
 
     # Override config if specified
     num_samples = args.num_samples or config["rollout"]["num_samples_per_problem"]
@@ -86,7 +112,8 @@ def main():
     all_rollouts = {}
 
     for problem in tqdm(problems, desc="Generating rollouts"):
-        problem_id = problem.get("unique_id", str(hash(problem["problem"])))
+        # 使用与 01_prepare_data.py 相同的 ID 生成逻辑
+        problem_id = problem.get("unique_id") or f"hash_{abs(hash(problem.get('problem', '')))}"
         prompt = prompt_template.format(problem=problem["problem"])
 
         rollouts = generator.generate_diverse_rollouts(

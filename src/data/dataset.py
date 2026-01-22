@@ -67,30 +67,79 @@ class MATHDataset:
         """Load the MATH dataset from HuggingFace."""
         logger.info(f"Loading MATH dataset (split={self.split}, subjects={self.subjects}, levels={self.levels})")
 
-        # Load each subject separately and concatenate
-        subject_datasets = []
-        for subject in self.subjects:
-            logger.info(f"Loading subject: {subject}")
-            ds = load_dataset(
-                "EleutherAI/hendrycks_math",
-                subject,
+        # Load the entire dataset (MATH-500 only has 'default' config)
+        logger.info("Loading MATH-500 dataset...")
+        try:
+            self.dataset = load_dataset(
+                "HuggingFaceH4/MATH-500",
                 split=self.split,
                 cache_dir=self.cache_dir,
             )
-            subject_datasets.append(ds)
+        except Exception as e:
+            logger.warning(f"Failed to load HuggingFaceH4/MATH-500: {e}")
+            logger.info("Trying to load with 'default' config...")
+            self.dataset = load_dataset(
+                "HuggingFaceH4/MATH-500",
+                "default",
+                split=self.split,
+                cache_dir=self.cache_dir,
+            )
 
-        # Concatenate all subject datasets
-        if len(subject_datasets) == 1:
-            self.dataset = subject_datasets[0]
+        logger.info(f"Loaded raw dataset: {len(self.dataset)} problems")
+        
+        # Debug: Check first example to understand structure
+        if len(self.dataset) > 0:
+            first_example = self.dataset[0]
+            logger.info(f"Dataset features: {list(first_example.keys())}")
+            logger.info(f"First example level: {first_example.get('level', 'N/A')}")
+            logger.info(f"First example subject: {first_example.get('subject', 'N/A')}")
+
+        # Filter by subject if specified (and not loading all subjects)
+        if set(self.subjects) != set(MATH_SUBJECTS):  # If not loading all subjects
+            logger.info(f"Filtering by subjects: {self.subjects}")
+            # Normalize subject names (handle variations)
+            normalized_subjects = [s.lower() for s in self.subjects]
+            
+            def subject_filter(x):
+                subject_field = x.get("subject", "").lower()
+                return subject_field in normalized_subjects
+            
+            self.dataset = self.dataset.filter(subject_filter)
+            logger.info(f"After subject filtering: {len(self.dataset)} problems")
+
+        # Filter by difficulty level - handle multiple possible formats
+        if len(self.dataset) > 0:
+            # Check level format from first example
+            first_level = str(self.dataset[0].get("level", ""))
+            logger.info(f"Level format example: '{first_level}'")
+            
+            # Try different level formats
+            level_formats = [
+                [f"Level {l}" for l in self.levels],  # "Level 3", "Level 4"
+                [str(l) for l in self.levels],  # "3", "4"
+                [f"level {l}" for l in self.levels],  # "level 3", "level 4"
+            ]
+            
+            def level_filter(x):
+                level_field = str(x.get("level", ""))
+                for format_list in level_formats:
+                    if level_field in format_list:
+                        return True
+                # Also try numeric comparison
+                try:
+                    level_num = int(level_field.replace("Level", "").replace("level", "").strip())
+                    return level_num in self.levels
+                except:
+                    pass
+                return False
+            
+            before_level_filter = len(self.dataset)
+            self.dataset = self.dataset.filter(level_filter)
+            logger.info(f"After level filtering ({self.levels}): {before_level_filter} -> {len(self.dataset)} problems")
         else:
-            self.dataset = concatenate_datasets(subject_datasets)
+            logger.warning("Dataset is empty before level filtering!")
 
-        # Filter by difficulty level
-        self.dataset = self.dataset.filter(
-            lambda x: x["level"] in [f"Level {l}" for l in self.levels]
-        )
-
-        logger.info(f"Loaded {len(self.dataset)} problems at levels {self.levels}")
+        logger.info(f"Final loaded: {len(self.dataset)} problems at levels {self.levels}")
         return self
 
     def get_problems(self) -> List[Dict[str, Any]]:
@@ -162,7 +211,8 @@ class FilteredMATHDataset:
         self.filtered_problems = []
 
         for problem in tqdm(self.base_dataset, desc="Filtering problems"):
-            problem_id = problem.get("unique_id", problem.get("problem"))
+            # 使用与 01_prepare_data.py 相同的 ID 生成逻辑
+            problem_id = problem.get("unique_id") or f"hash_{abs(hash(problem.get('problem', '')))}"
 
             dpo_correct = dpo_results.get(problem_id, True)  # Default to True (skip)
             rlvr_correct = rlvr_results.get(problem_id, False)  # Default to False (skip)

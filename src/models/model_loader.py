@@ -2,10 +2,13 @@
 Model Loading Utilities
 
 Handles loading and managing multiple model checkpoints for comparison.
+Supports multi-GPU configuration for large models.
 """
 
 import logging
-from dataclasses import dataclass
+import os
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -14,11 +17,47 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
 logger = logging.getLogger(__name__)
 
+def get_device_map_config(
+    device: str,
+    multi_gpu_config: Optional[Dict[str, Any]] = None,
+) -> Union[str, Dict[str, Any]]:
+    """
+    根据配置生成设备映射策略或显存限制字典。
+    """
+    if multi_gpu_config is None or not multi_gpu_config.get("enabled", False):
+        return device
+
+    gpu_ids = multi_gpu_config.get("gpu_ids")
+    max_memory_per_gpu = multi_gpu_config.get("max_memory_per_gpu")
+
+    # 如果指定了 GPU ID 列表，设置环境变量
+    if gpu_ids is not None and len(gpu_ids) > 0:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpu_ids))
+        logger.info(f"已设置 CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']}")
+
+    if device in ("auto", "balanced", "sequential"):
+        if max_memory_per_gpu:
+            # 获取当前进程可见的 GPU 数量
+            # 如果 CUDA_VISIBLE_DEVICES=4，这里返回 1
+            num_gpus = torch.cuda.device_count()
+            
+            # 修复方案：GPU ID 使用 int，其他使用 str
+            # 这样 accelerate 就能识别出 0 是一个 GPU 索引
+            max_memory = {}
+            for i in range(num_gpus):
+                max_memory[i] = max_memory_per_gpu  # 键是 int 类型
+            
+            max_memory["cpu"] = multi_gpu_config.get("max_memory_cpu", "64GiB")
+            
+            logger.info(f"生成 max_memory 限制: {max_memory}")
+            return max_memory
+        return device
+
+    return device
 
 @dataclass
 class ModelCheckpoint:
-    """Container for a model checkpoint."""
-
+    """模型检查点容器。"""
     name: str
     path: str
     step: Optional[int] = None
@@ -29,9 +68,8 @@ class ModelCheckpoint:
 
 class ModelLoader:
     """
-    Manages loading and caching of multiple model checkpoints.
-
-    Efficiently loads models for comparison across training stages.
+    管理多个模型检查点的加载和缓存。
+    支持多 GPU 显存分配策略。
     """
 
     def __init__(
@@ -39,20 +77,17 @@ class ModelLoader:
         device: str = "cuda",
         dtype: torch.dtype = torch.bfloat16,
         cache_dir: Optional[str] = None,
+        multi_gpu_config: Optional[Dict[str, Any]] = None,
     ):
-        """
-        Initialize model loader.
-
-        Args:
-            device: Device to load models on
-            dtype: Data type for model weights
-            cache_dir: Directory for model cache
-        """
         self.device = device
         self.dtype = dtype
         self.cache_dir = cache_dir
+        self.multi_gpu_config = multi_gpu_config
         self.checkpoints: Dict[str, ModelCheckpoint] = {}
         self.tokenizer = None
+
+        # 预先计算设备配置
+        self.device_config = get_device_map_config(device, multi_gpu_config)
 
     def register_checkpoint(
         self,
@@ -61,172 +96,91 @@ class ModelLoader:
         step: Optional[int] = None,
         stage: Optional[str] = None,
     ) -> None:
-        """
-        Register a checkpoint for later loading.
-
-        Args:
-            name: Unique identifier for this checkpoint
-            path: HuggingFace model path or local path
-            step: Training step number
-            stage: Training stage identifier
-        """
         self.checkpoints[name] = ModelCheckpoint(
-            name=name,
-            path=path,
-            step=step,
-            stage=stage,
+            name=name, path=path, step=step, stage=stage
         )
-        logger.info(f"Registered checkpoint: {name} ({path})")
+        logger.info(f"已注册检查点: {name} ({path})")
 
     def register_from_config(self, config: Dict[str, Any]) -> None:
-        """
-        Register all checkpoints from configuration.
-
-        Args:
-            config: Configuration dictionary with model specifications
-        """
         models_config = config.get("models", {})
-
-        # Register base DPO model
         if "base_model" in models_config:
-            self.register_checkpoint(
-                name="dpo",
-                path=models_config["base_model"],
-                stage="dpo",
-            )
-
-        # Register SFT model if specified
+            self.register_checkpoint("dpo", models_config["base_model"], stage="dpo")
         if "sft_model" in models_config:
-            self.register_checkpoint(
-                name="sft",
-                path=models_config["sft_model"],
-                stage="sft",
-            )
-
-        # Register RLVR checkpoints
+            self.register_checkpoint("sft", models_config["sft_model"], stage="sft")
         for ckpt in models_config.get("rlvr_checkpoints", []):
             name = f"rlvr_step_{ckpt['step']}"
-            self.register_checkpoint(
-                name=name,
-                path=ckpt["path"],
-                step=ckpt["step"],
-                stage=ckpt["stage"],
-            )
+            self.register_checkpoint(name, ckpt["path"], step=ckpt["step"], stage=ckpt["stage"])
 
     def load_tokenizer(self, model_path: Optional[str] = None) -> AutoTokenizer:
-        """
-        Load tokenizer (shared across all checkpoints).
-
-        Args:
-            model_path: Path to load tokenizer from (uses first registered if None)
-
-        Returns:
-            Loaded tokenizer
-        """
         if self.tokenizer is not None:
             return self.tokenizer
-
         if model_path is None:
-            # Use first registered checkpoint
             if not self.checkpoints:
-                raise ValueError("No checkpoints registered")
+                raise ValueError("尚未注册任何检查点")
             model_path = list(self.checkpoints.values())[0].path
 
-        logger.info(f"Loading tokenizer from {model_path}")
+        logger.info(f"正在加载分词器: {model_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_path,
-            cache_dir=self.cache_dir,
-            trust_remote_code=True,
+            model_path, cache_dir=self.cache_dir, trust_remote_code=True
         )
-
-        # Ensure padding token is set
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-
         return self.tokenizer
 
     def load_model(self, name: str) -> PreTrainedModel:
-        """
-        Load a specific model checkpoint.
-
-        Args:
-            name: Name of registered checkpoint
-
-        Returns:
-            Loaded model
-        """
+        """加载指定的模型检查点。"""
         if name not in self.checkpoints:
-            raise ValueError(f"Checkpoint '{name}' not registered")
+            raise ValueError(f"检查点 '{name}' 未注册")
 
         ckpt = self.checkpoints[name]
-
         if ckpt.loaded and ckpt.model is not None:
-            logger.debug(f"Returning cached model: {name}")
+            logger.debug(f"返回已缓存的模型: {name}")
             return ckpt.model
 
-        logger.info(f"Loading model: {name} from {ckpt.path}")
+        logger.info(f"正在加载模型: {name} 来自 {ckpt.path}")
 
+        # 核心修复 2：正确分发 device_map 和 max_memory 参数
+        if isinstance(self.device_config, dict):
+            # 如果配置是字典，说明是显存限制，device_map 必须设为策略（如 "auto"）
+            current_device_map = "auto"
+            current_max_memory = self.device_config
+        else:
+            # 如果是字符串（如 "cuda:0"），直接作为 device_map
+            current_device_map = self.device_config
+            current_max_memory = None
+
+        # 核心修复 3：low_cpu_mem_usage=True 解决 embed_tokens 分配失败问题
         model = AutoModelForCausalLM.from_pretrained(
             ckpt.path,
             torch_dtype=self.dtype,
-            device_map=self.device,
+            device_map=current_device_map,
+            max_memory=current_max_memory,
             cache_dir=self.cache_dir,
             trust_remote_code=True,
+            low_cpu_mem_usage=True, 
         )
         model.eval()
 
         ckpt.model = model
         ckpt.loaded = True
-
         return model
 
-    def load_all(self) -> Dict[str, PreTrainedModel]:
-        """
-        Load all registered checkpoints.
-
-        Returns:
-            Dictionary mapping names to loaded models
-        """
-        models = {}
-        for name in self.checkpoints:
-            models[name] = self.load_model(name)
-        return models
-
     def unload_model(self, name: str) -> None:
-        """
-        Unload a model to free memory.
-
-        Args:
-            name: Name of checkpoint to unload
-        """
         if name in self.checkpoints:
             ckpt = self.checkpoints[name]
             if ckpt.model is not None:
                 del ckpt.model
                 ckpt.model = None
                 ckpt.loaded = False
-                torch.cuda.empty_cache()
-                logger.info(f"Unloaded model: {name}")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                logger.info(f"已卸载模型: {name}")
 
     def unload_all(self) -> None:
-        """Unload all models to free memory."""
-        for name in self.checkpoints:
+        for name in list(self.checkpoints.keys()):
             self.unload_model(name)
 
-    def get_checkpoint_info(self, name: str) -> ModelCheckpoint:
-        """Get information about a checkpoint."""
-        return self.checkpoints.get(name)
-
-    def list_checkpoints(self) -> List[str]:
-        """List all registered checkpoint names."""
-        return list(self.checkpoints.keys())
-
     def get_rlvr_checkpoints(self) -> List[str]:
-        """Get names of RLVR checkpoints in order of training step."""
-        rlvr_ckpts = [
-            (name, ckpt)
-            for name, ckpt in self.checkpoints.items()
-            if ckpt.step is not None
-        ]
+        rlvr_ckpts = [(n, c) for n, c in self.checkpoints.items() if c.step is not None]
         rlvr_ckpts.sort(key=lambda x: x[1].step)
         return [name for name, _ in rlvr_ckpts]

@@ -16,6 +16,8 @@ datasets>=2.16.0
 pandas>=2.0.0
 numpy>=1.24.0
 scipy>=1.11.0
+sympy>=1.12.0  # For mathematical equivalence checking
+antlr4-python3-runtime>=4.9.0  # Required for sympy LaTeX parsing
 
 # =============================================================================
 # Visualization
