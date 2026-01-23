@@ -1,0 +1,22 @@
+{
+  "test/number_theory/1032.json": false,
+  "test/intermediate_algebra/1000.json": false,
+  "test/counting_and_probability/134.json": true,
+  "test/intermediate_algebra/1247.json": true,
+  "test/geometry/283.json": false,
+  "test/algebra/661.json": true,
+  "test/number_theory/156.json": false,
+  "test/precalculus/477.json": false,
+  "test/counting_and_probability/803.json": true,
+  "test/algebra/2570.json": false,
+  "test/geometry/221.json": false,
+  "test/intermediate_algebra/591.json": true,
+  "test/algebra/907.json": true,
+  "test/number_theory/89.json": true,
+  "test/number_theory/183.json": false,
+  "test/algebra/1934.json": false,
+  "test/counting_and_probability/25149.json": false,
+  "test/counting_and_probability/339.json": true,
+  "test/intermediate_algebra/776.json": false,
+  "test/intermediate_algebra/199.json": false
+}
