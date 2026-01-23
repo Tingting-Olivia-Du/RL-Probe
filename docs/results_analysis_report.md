@@ -51,6 +51,45 @@ These may indicate checkpoints where the model's behavior shifts.
 💡 **Key Insight**: Turning points may indicate checkpoints where the model
    starts to 'correct' DPO errors more effectively, suggesting improved reasoning capability.
 
+### 📊 Training Trend Analysis (Updated with Steps 700-900)
+
+**KL Divergence Evolution:**
+- **Early Training (Step 100-200):** KL divergence increases rapidly from 0.0068 to 0.0125 (+83.8%), indicating the model is learning to differentiate from DPO
+- **Mid Training (Step 200-300):** KL continues to rise to peak at 0.0185 (+48.0%), suggesting maximum divergence point
+- **Stabilization Phase (Step 300-600):** KL stabilizes around 0.013-0.018, showing consistent behavior with some fluctuation
+- **Late Training (Step 600-800):** KL decreases to 0.0150 at Step 800 (lowest point), then increases slightly
+- **Final Phase (Step 800-1000):** KL stabilizes around 0.0168-0.0170, indicating refined and stable behavior
+
+**Spike Pattern Evolution:**
+- **Step 100:** Highest spike count (14.89/problem) but lowest spike values (0.1109), suggesting many small corrections
+- **Step 300:** Lowest spike count (6.42/problem) but highest spike values (0.6174), indicating fewer but more significant corrections
+- **Step 600:** Low spike count (8.91/problem) with high spike values (0.4959), showing efficient correction pattern
+- **Step 700:** Spike count increases to 12.18/problem, spike values moderate (0.3752), suggesting more frequent corrections
+- **Step 800:** Spike count 11.88/problem, spike values 0.3506, showing balanced correction strategy
+- **Step 900-1000:** Spike count stabilizes around 11.15-11.87/problem, spike values around 0.41-0.42, indicating consistent correction pattern
+
+**Key Observations:**
+1. **KL Divergence Trend:** 
+   - Peak at Step 300 (0.0185), then decreases to Step 800 (0.0150), then stabilizes
+   - Step 800 shows the lowest KL divergence, suggesting closest alignment with DPO while maintaining correction capability
+   
+2. **Spike Value Trend:** 
+   - Increases from 0.11 (Step 100) to 0.62 (Step 300), then decreases and stabilizes around 0.35-0.42
+   - This suggests RLVR learns to make more confident corrections early, then refines to more balanced corrections
+   
+3. **Spike Count Trend:** 
+   - Decreases from 14.89 to 6.42 (Step 100→300), then increases to 12.18 (Step 700), then stabilizes around 11-12
+   - The increase after Step 600 suggests the model develops more nuanced correction strategies
+   
+4. **Entropy Stability:** 
+   - Entropy remains relatively stable (0.250-0.263), with slight increase at Step 900 (0.2633)
+   - This indicates consistent prediction confidence across training, with slight increase in exploration at Step 900
+
+**New Checkpoint Insights (700-900):**
+- **Step 700:** Shows increased spike activity (12.18/problem) with moderate spike values, suggesting active refinement
+- **Step 800:** Lowest KL divergence (0.0150) with balanced spikes, may represent optimal balance between differentiation and similarity
+- **Step 900:** Slight increase in entropy (0.2633) and KL (0.0168), spike count decreases to 11.15, showing fine-tuning phase
+
 ## Detailed Statistics
 
 ### rlvr_step_100
@@ -319,3 +358,67 @@ This analysis uses **Teacher Forcing** to examine how RLVR models respond to DPO
 - **Localized Corrections:** The spike pattern suggests RLVR learns to make targeted corrections rather than wholesale distribution changes
 - **Category-Specific Learning:** Different KL values across categories indicate RLVR has learned category-specific improvements
 - **Error Correction Mechanism:** High spike values in specific problems suggest RLVR has developed mechanisms to identify and correct DPO's errors
+
+## Conclusions
+
+### Training Dynamics Across All Checkpoints
+
+1. **Early Stage (Step 100-200):** 
+   - Model shows high sensitivity with many small corrections (14.89 spikes/problem)
+   - Low KL divergence (0.0068) suggests model is still similar to DPO baseline
+   - This stage represents initial learning phase
+
+2. **Peak Divergence (Step 300):**
+   - Maximum KL divergence (0.0185) indicates strongest differentiation from DPO
+   - Fewer but more significant spikes (6.42 spikes/problem, mean value 0.6174)
+   - Model has learned to make confident corrections at critical points
+
+3. **Stabilization Phase (Step 400-600):**
+   - KL divergence stabilizes around 0.013-0.017
+   - Spike patterns become more consistent
+   - Model behavior converges to stable correction strategy
+
+4. **Refinement Phase (Step 700-800):**
+   - **Step 700:** Increased spike activity (12.18/problem) suggests active refinement
+   - **Step 800:** Lowest KL divergence (0.0150) with balanced spikes, may represent optimal balance
+   - Model fine-tunes correction strategy
+
+5. **Final Phase (Step 900-1000):**
+   - KL divergence stabilizes around 0.0168-0.0170
+   - Spike count stabilizes around 11-12 per problem
+   - Entropy slightly increases at Step 900 (0.2633), then returns to baseline
+   - Model maintains effective error correction capability
+
+### Key Takeaways
+
+- **RLVR successfully learns to differentiate from DPO:** KL divergence increases significantly during training (from 0.0068 to peak 0.0185)
+- **Correction strategy evolves:** From many small corrections (Step 100) to fewer but more confident ones (Step 300), then to balanced strategy (Step 700-1000)
+- **Optimal checkpoint identification:** Step 800 shows lowest KL divergence (0.0150) while maintaining effective spike patterns, suggesting optimal balance
+- **Stable learning:** Entropy remains relatively consistent (0.250-0.263), indicating stable prediction confidence
+- **Category-specific improvements:** Math symbols show highest KL divergence (0.0339), suggesting targeted improvements in mathematical reasoning
+
+### Recommendations
+
+1. **Checkpoint Selection:** 
+   - **Step 300:** Peak divergence - best for maximum differentiation
+   - **Step 800:** Lowest KL - best for balanced performance
+   - **Step 1000:** Final checkpoint - best for production use
+
+2. **Further Analysis:** 
+   - Investigate problems with high KL divergence but low spike counts for targeted improvements
+   - Analyze Step 800's low KL divergence pattern to understand optimal correction strategy
+
+3. **Category Focus:** 
+   - Pay attention to math_symbol and other token categories with high KL divergence
+   - Investigate why variable tokens show lowest KL divergence
+
+4. **Long-term Training:** 
+   - Consider extending training beyond Step 1000 to observe further refinement
+   - Monitor entropy changes to detect overfitting or underfitting
+
+---
+
+**Report Location:** `docs/results_analysis_report.md`  
+**Visualizations:** `outputs/figures/`  
+**Total Checkpoints Analyzed:** 10 (Steps: 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)  
+**Generated:** 2026-01-23 19:09:01
